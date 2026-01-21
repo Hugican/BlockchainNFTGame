@@ -134,6 +134,13 @@ function App() {
     }
   };
 
+  // Disconnect wallet
+  const desconectarWallet = () => {
+    setCuenta("");
+    setCartas([]);
+    mostrarToast("Wallet desconectada", "info");
+  };
+
   // Claim new card
   const reclamarCarta = async () => {
     if (!window.ethereum || !cuenta) return;
@@ -171,7 +178,7 @@ function App() {
     <div className="app-container">
       <h1 className="app-title">EtherBeasts</h1>
 
-      <BotonConectar cuenta={cuenta} onConectar={conectarWallet} />
+      <BotonConectar cuenta={cuenta} onConectar={conectarWallet} onDesconectar={desconectarWallet} />
 
       {cuenta && (
         <>

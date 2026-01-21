@@ -53,6 +53,30 @@ body {
   font-family: 'Courier New', monospace;
 }
 
+.btn-disconnect {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  margin-left: 8px;
+  background: transparent;
+  border: 1px solid #666;
+  border-radius: 50%;
+  color: #888;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-disconnect:hover {
+  background: #ff4444;
+  border-color: #ff4444;
+  color: white;
+  transform: scale(1.1);
+}
+
 .btn-connect {
   padding: 14px 28px;
   font-size: 18px;
