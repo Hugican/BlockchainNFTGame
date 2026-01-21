@@ -2,32 +2,64 @@ import React, { useState, useEffect } from 'react';
 import { ethers } from 'ethers';
 import CartasABI from './Cartas.json';
 
-const CONTRACT_ADDRESS = "0xCa80fE6853d70919603F221c3c4A7E398f735043";
+const CONTRACT_ADDRESS = "0x5C37aD68657589990000a0d2Da03AEC15756c87E";
 
 function App() {
   const [cuenta, setCuenta] = useState("");
   const [cartas, setCartas] = useState([]); // Aquí guardaremos la lista para el .map
   const [cargando, setCargando] = useState(false);
 
+  useEffect(() => {
+    if (window.ethereum) {
+      // Escucha si el usuario cambia de cuenta en MetaMask
+      window.ethereum.on('accountsChanged', (accounts) => {
+        if (accounts.length > 0) {
+          setCuenta(accounts[0]);
+          cargarCartas(accounts[0]);
+        } else {
+          setCuenta("");
+          setCartas([]);
+        }
+      });
+    }
+  }, []);
+
   // Función para obtener las cartas del contrato
   const cargarCartas = async (direccion) => {
-    if (!window.ethereum) return;
+    if (!window.ethereum || !direccion) return;
     try {
+      // Usamos el proveedor de MetaMask
       const provider = new ethers.BrowserProvider(window.ethereum);
       const contrato = new ethers.Contract(CONTRACT_ADDRESS, CartasABI.abi, provider);
 
-      // Consultamos cuántas cartas tiene el usuario (balanceOf)
-      const balance = await contrato.balanceOf(direccion);
-      const numCartas = Number(balance);
+      // Forzamos la consulta del balance
+      const balanceGrande = await contrato.balanceOf(direccion);
+      const numCartas = Number(balanceGrande);
 
-      // Creamos una lista de objetos para que React los pinte
+      console.log("Dirección consultada:", direccion);
+      console.log("Balance detectado:", numCartas);
+
+      if (numCartas === 0) {
+        setCartas([]);
+        return;
+      }
+
       let listaCartas = [];
       for (let i = 0; i < numCartas; i++) {
-        listaCartas.push({ id: i + 1 });
+        // Usamos la función de Enumerable para obtener el ID real
+        const tokenId = await contrato.tokenOfOwnerByIndex(direccion, i);
+        const bichoId = await contrato.bichoAsignado(tokenId);
+        const uri = await contrato.tokenURI(tokenId);
+
+        listaCartas.push({
+          id: Number(tokenId),
+          bichoReal: Number(bichoId),
+          uri: uri.replace("ipfs://", "https://ipfs.io/ipfs/")
+        });
       }
       setCartas(listaCartas);
     } catch (error) {
-      console.error("Error cargando cartas:", error);
+      console.error("Error detallado en cargarCartas:", error);
     }
   };
 
@@ -35,39 +67,46 @@ function App() {
     if (window.ethereum) {
       try {
         const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
-        const chainId = await window.ethereum.request({ method: 'eth_chainId' });
+        const walletActiva = accounts[0]; // Usamos una variable local
 
+        const chainId = await window.ethereum.request({ method: 'eth_chainId' });
         if (chainId !== '0xaa36a7') {
-          alert("Cambiando a Sepolia...");
           await cambiarARedSepolia();
         }
 
-        setCuenta(accounts[0]);
-        cargarCartas(accounts[0]); // Cargamos cartas nada más conectar
+        setCuenta(walletActiva);
+        await cargarCartas(walletActiva); // Pasamos la variable local, no el estado 'cuenta'
       } catch (error) {
         console.error("Error al conectar:", error);
       }
-    } else {
-      alert("Por favor, instala MetaMask");
     }
   };
-
   const reclamarCarta = async () => {
     try {
-      if (!window.ethereum) return;
+      if (!window.ethereum || !cuenta) return;
       setCargando(true);
+
       const provider = new ethers.BrowserProvider(window.ethereum);
       const signer = await provider.getSigner();
       const contrato = new ethers.Contract(CONTRACT_ADDRESS, CartasABI.abi, signer);
 
+      // Mandamos la transacción a la cuenta activa
       const tx = await contrato.ganarCarta(cuenta);
-      await tx.wait();
+      console.log("Transacción enviada...", tx.hash);
 
-      alert("¡Carta minteada!");
-      cargarCartas(cuenta); // Recargamos la galería para que aparezca la nueva
+      await tx.wait(); // Esperamos confirmación en la blockchain
+      console.log("Transacción confirmada");
+
+      alert("¡Carta minteada con éxito!");
+
+      // IMPORTANTE: Esperamos un segundo extra para que el nodo de Sepolia se actualice
+      setTimeout(() => {
+        cargarCartas(cuenta);
+      }, 2000);
+
     } catch (error) {
-      console.error("Error:", error);
-      alert("Error al reclamar");
+      console.error("Error completo:", error);
+      alert("Error al mintear. Revisa la consola.");
     } finally {
       setCargando(false);
     }
@@ -97,8 +136,8 @@ function App() {
   };
 
   return (
-    <div style={{ textAlign: 'center', marginTop: '50px', fontFamily: 'Arial', backgroundColor: '#1a1a1a', color: 'white', minHeight: '100vh', padding: '20px' }}>
-      <h1>CardChain TFG 🃏</h1>
+    <div style={estiloContenedorPrincipal}>
+      <h1 style={{ marginTop: '0', paddingBottom: '20px' }}>EtherBeasts 🃏</h1>
 
       {!cuenta ? (
         <button onClick={conectarWallet} style={estiloBoton}>
@@ -113,18 +152,52 @@ function App() {
             {cargando ? "⏳ Minteando..." : "🚀 ¡Abrir sobre de cartas!"}
           </button>
 
-          {/* AQUÍ ESTÁ LA GALERÍA QUE FALTABA */}
           <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', marginTop: '40px' }}>
-            {cartas.map((carta, index) => (
-              <div key={index} style={estiloCarta}>
-                <img
-                  src={`/assets/cartas/${(index % 5) + 1}.png`}
-                  alt="Carta"
-                  style={{ width: '100%', borderRadius: '10px 10px 0 0' }}
-                />
-                <div style={{ padding: '10px' }}>
-                  <h3 style={{ margin: '5px 0' }}>Bicho #{index + 1}</h3>
-                  <p style={{ fontSize: '12px', color: '#ffd700' }}>NFT Oficial</p>
+            {cartas.map((carta) => (
+              <div
+                key={carta.id}
+                style={estiloCarta}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.transform = 'translateY(-10px)';
+                  e.currentTarget.style.boxShadow = '0 10px 25px rgba(255, 215, 0, 0.3)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.transform = 'translateY(0)';
+                  e.currentTarget.style.boxShadow = '0 4px 20px rgba(0,0,0,0.6)';
+                }}
+              >
+                <div style={{ width: '100%', height: '320px', overflow: 'hidden', borderRadius: '14px 14px 0 0' }}>
+                  <img
+                    src={`https://gateway.pinata.cloud/ipfs/bafybeicwuguf2zsxwcs7p4zeiseea62kgeqwdgksvpexxno6ofajo4njci/${carta.bichoReal}.png`}
+                    alt="EtherBeast"
+                    style={{
+                      width: '100%',
+                      height: '100%',
+                      display: 'block',
+                      objectFit: 'cover',
+                      backgroundColor: '#333'
+                    }}
+                    onError={(e) => console.error("Error cargando imagen:", e.target.src)}
+                  />
+                </div>
+
+                <div style={{ padding: '15px' }}>
+                  <h2 style={{ margin: '5px 0', color: '#fff', fontSize: '1.2rem', fontWeight: 'bold' }}>
+                    EtherBeast #{carta.id}
+                  </h2>
+
+                  <p style={{ fontSize: '11px', color: '#aaa', fontStyle: 'italic', marginTop: '5px' }}>
+                    NFT Verificado en IPFS
+                  </p>
+
+                  <a
+                    href={carta.uri}
+                    target="_blank"
+                    rel="noreferrer"
+                    style={{ fontSize: '10px', color: '#00ccff', textDecoration: 'none' }}
+                  >
+                    🔗 Ver Metadatos
+                  </a>
                 </div>
               </div>
             ))}
@@ -140,13 +213,26 @@ const estiloBoton = { padding: '10px 20px', fontSize: '16px', cursor: 'pointer',
 const estiloBotonEspecial = { padding: '15px 30px', fontSize: '20px', cursor: 'pointer', borderRadius: '12px', backgroundColor: '#4CAF50', color: 'white', border: 'none', fontWeight: 'bold' };
 
 const estiloCarta = {
-  width: '180px',
-  margin: '15px',
-  borderRadius: '12px',
+  width: '310px',
+  margin: '10px',
+  borderRadius: '16px',
   border: '2px solid #ffd700',
   backgroundColor: '#2c2c2c',
-  boxShadow: '0 4px 15px rgba(0,0,0,0.5)',
-  overflow: 'hidden'
+  boxShadow: '0 4px 20px rgba(0,0,0,0.6)',
+  overflow: 'hidden',
+  transition: 'all 0.3s ease-in-out',
+  cursor: 'pointer'
+};
+
+const estiloContenedorPrincipal = {
+  textAlign: 'center',
+  margin: '0',
+  paddingTop: '50px',
+  fontFamily: 'Arial',
+  backgroundColor: '#1a1a1a',
+  color: 'white',
+  minHeight: '100vh',
+  paddingBottom: '50px'
 };
 
 export default App;

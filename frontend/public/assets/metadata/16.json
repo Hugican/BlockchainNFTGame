@@ -1,0 +1,9 @@
+{
+  "name": "EtherBeast #16",
+  "description": "Entidad suprema de la blockchain.",
+  "image": "ipfs://bafybeicwuguf2zsxwcs7p4zeiseea62kgeqwdgksvpexxno6ofajo4njci/16.png",
+  "attributes": [
+    { "trait_type": "Tipo", "value": "Cosmico" },
+    { "trait_type": "Rareza", "value": "Epic" }
+  ]
+}
